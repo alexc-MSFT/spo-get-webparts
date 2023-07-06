@@ -4,7 +4,7 @@ Connect-PnPOnline -Url "https://groverale.sharepoint.com/sites/home" -Interactiv
 # Specify the page Name and the Web Part title
 # https://groverale.sharepoint.com/sites/home/SitePages/FAQs.aspx
 $pageName = "FAQs"
-$webPartTitle = "YouTube"
+$webPartTitle = "Stream"
 
 # Get the page and the Web Part
 $page = Get-PnPClientSidePage -Identity $pageName
