@@ -390,11 +390,11 @@ function GetSiteOwner($site)
                             continue
                         }
                         else {
-                            Write-Host "    Found: $($member.AdditionalProperties.id) (group) as an infered owner" -ForegroundColor Green
+                            Write-Host "    Found: $($member.Id) (group) as an infered owner" -ForegroundColor Green
                             Write-Host "     Getting Group Members" -ForegroundColor White
                             ## We have a group and must get the members of that group
                             $users = @()
-                            #$owners += GetSecGroupMembers -id $member.Id -users $users
+                            $owners += GetSecGroupMembers -groupId $member.Id -users $users
                         }
                     }
                     continue
@@ -427,20 +427,22 @@ function GetSiteOwner($site)
 }
 
 ## Recursive function to get members (users) of a security group
-function GetSecGroupMembers($id, $users)
+function GetSecGroupMembers($groupId, $users)
 {
     $members = Get-MgGroupMember -GroupId $groupId -Property "userPrincipalName,id"
 
     foreach ($member in $members)
     {
-        if ($null -ne $member.UserPrincipalName)
+        if ($null -ne $member.AdditionalProperties.userPrincipalName)
         {
+            Write-Host "     Found Member - $($member.AdditionalProperties.userPrincipalName) " -ForegroundColor Green
             ## We have a user
-            $users += $member.UserPrincipalName
+            $users += $member.AdditionalProperties.userPrincipalName
         }
         else {
+            Write-Host "     Found Group - $($member.Id) " -ForegroundColor Green
             ## We have a group and must get the members (that are users) of that group
-            $users += GetSecGroupMembers -id $member.Id -users $users
+            $users += GetSecGroupMembers -groupId $member.Id -users $users
         }
     }
     return $users
@@ -477,7 +479,7 @@ foreach ($site in $sites)
     foreach($subsite in $subsites)
     {
         ## Process Sites
-        #ProcessSite -site $subsite -owners $ownerEmails
+        ProcessSite -site $subsite -ownerEmails $ownerEmails
     }
 }
 
