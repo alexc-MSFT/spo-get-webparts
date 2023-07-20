@@ -71,8 +71,8 @@ function ConnectToMSGraph
     try{
         
         Connect-MgGraph -ClientId $clientId -TenantId $tenantId -CertificateThumbprint $thumbprint
-        ## pages is part of the beta endpoint
-        Select-MgProfile -Name "beta"
+
+        select-MgProfile -Name "beta"
     }
     catch{
         Write-Host "Error connecting to MS Graph - $($Error[0].Exception.Message)" -ForegroundColor Red
@@ -158,21 +158,22 @@ function Get-SitePageWebparts($site, $page, $ownerEmails)
         Write-Host " Getting webparts for page, $($page.Title) on site $($site.WebUrl)"
         
         $page = Get-MgSitePage -SiteId $site.Id -SitePageId $page.Id -ExpandProperty "webparts" -ErrorAction Stop
-       #$webparts = Get-MgSitePageWebPart -SiteId $site.Id -SitePageId $page.Id -ErrorAction Stop
+        #$webparts = Get-MgBetaSitePageWebPart -SiteId $site.Id -SitePageId $page.Id -ErrorAction Stop
+      
         return $page
     }
     catch {
         
         ## all errors are now reprocessed via PnP
         ##if ($Error[0].Exception.Message.Contains("One of the provided arguments is not acceptable"))
-        {
-            # Connect to PnP
-            ConnectToPnP -siteUrl $site.WebUrl
-            
-            # Use PnP to get webparts
-            CheckPageContainsWebPartPnP -site $site -page $page -ownerEmails $ownerEmails
-            return "pnp"
-        }
+        
+        # Connect to PnP
+        ConnectToPnP -siteUrl $site.WebUrl
+        
+        # Use PnP to get webparts
+        CheckPageContainsWebPartPnP -site $site -page $page -ownerEmails $ownerEmails
+        return "pnp"
+        
 
         # Write-LogEntry -siteUrl $site.WebUrl -ownerEmail "" -pageUrl $page.WebUrl -pageTitle $pageTitle -webPartId "" -type "Error" -message "Error getting webparts - $($Error[0].Exception.Message)"
         # Write-Host " Error getting webparts for page on site $($site.WebUrl) - $($Error[0].Exception.Message)" -ForegroundColor Red
