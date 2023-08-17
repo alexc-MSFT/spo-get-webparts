@@ -1,1 +1,6 @@
 Output
+typescriptapp/node_modules
+typescriptapp/appSettings.ts
+dotnetapp/ListSitesWithWebPart/bin
+dotnetapp/ListSitesWithWebPart/obj
+dotnetapp/ListSitesWithWebPart/.vscode

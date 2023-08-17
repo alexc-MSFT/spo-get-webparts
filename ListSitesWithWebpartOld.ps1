@@ -10,7 +10,6 @@
 ## Requires the following modules:
 try {
     Import-Module Microsoft.Graph.Sites
-    Import-Module Microsoft.Graph.Beta.Sites
     Import-Module Microsoft.Graph.Groups
     Import-Module PnP.PowerShell
 }
@@ -74,7 +73,7 @@ function ConnectToMSGraph
         
         Connect-MgGraph -ClientId $clientId -TenantId $tenantId -CertificateThumbprint $thumbprint
 
-        #select-MgProfile -Name "beta"
+        select-MgProfile -Name "beta"
     }
     catch{
         Write-Host "Error connecting to MS Graph - $($Error[0].Exception.Message)" -ForegroundColor Red
@@ -232,7 +231,7 @@ function Get-Sites
         
         if (!$allSites) {
             $siteList = ReadSitesFromTxtFile($inputSitesCSV)
-            $sites = Get-MgSite -Property "siteCollection,webUrl,id" -All | where { $siteList -contains $_.WebUrl } -ErrorAction Stop
+            $sites = Get-MgSite -Property "siteCollection,webUrl,id" -All | Where-Object { !($_.WebUrl.Contains("my.sharepoint.com"))} | where { $siteList -contains $_.WebUrl } -ErrorAction Stop
             return $sites 
         }
 
