@@ -6,6 +6,7 @@ import { TokenCredentialAuthenticationProvider } from
 
 import { AppSettings } from './appSettings';
 import { Site } from '@microsoft/microsoft-graph-types';
+import * as fs from 'fs';
 
 let _settings: AppSettings | undefined = undefined;
 let _clientSecretCredential: ClientSecretCredential | undefined = undefined;
@@ -68,31 +69,37 @@ export async function getAllSitesAsync(): Promise<Site[]> {
         .get();
 
 
-        const callback: PageIteratorCallback = (site: Site) => {
-            console.log(site.webUrl);
-            sites.push(site);
-            return true;
-          };
+    const callback: PageIteratorCallback = (site: Site) => {
+        // console.log(site.webUrl);
+        if (site.webUrl?.includes('my.sharepoint.com')) {
+            // don't add mysite
+        } else {
 
-          // A set of request options to be applied to
-        // all subsequent page requests
-        const requestOptions: GraphRequestOptions = {
-            // // Re-add the header to subsequent requests
-            // headers: {
-            //     Prefer: 'outlook.body-content-type="text"',
-            // },
-        };
-    
-          // Creating a new page iterator instance with client a graph client
-        // instance, page collection response from request and callback
-        const pageIterator = new PageIterator(
-            _appClient,
-            response,
-            callback,
-            requestOptions
-        );
-    
-        
+            sites.push(site);
+        }
+
+        return true;
+    };
+
+    // A set of request options to be applied to
+    // all subsequent page requests
+    const requestOptions: GraphRequestOptions = {
+        // // Re-add the header to subsequent requests
+        // headers: {
+        //     Prefer: 'outlook.body-content-type="text"',
+        // },
+    };
+
+    // Creating a new page iterator instance with client a graph client
+    // instance, page collection response from request and callback
+    const pageIterator = new PageIterator(
+        _appClient,
+        response,
+        callback,
+        requestOptions
+    );
+
+
 
     await pageIterator.iterate();
 
@@ -116,7 +123,7 @@ export async function getSitesAsync(): Promise<PageCollection> {
 // This call back should return boolean indicating whether not to
 // continue the iteration process.
 
-  
+
 
 
 export async function getSitePagesAsync(site: Site): Promise<PageCollection> {
@@ -141,49 +148,139 @@ export async function getSitePageWebPartsAsync(site: Site, page: any): Promise<P
         .get();
 }
 
-export async function getWebpartsOnSites(sites: Site[]): Promise<void> {
+export async function getWebpartsOnSites(sites: Site[], webpartIdsToFind: string[], filePath: string): Promise<void> {
     // Ensure client isn't undefined
     if (!_appClient) {
         throw new Error('Graph has not been initialized for app-only auth');
     }
 
+    // Create a writable stream to append data to the file
+    const successStream = fs.createWriteStream(`${filePath}_Success`, { flags: 'a' });
+    const errorStream = fs.createWriteStream(`${filePath}_Error`, { flags: 'a' });
+
+    // ADd handler for stream events
+    successStream.on('finish', () => {
+        console.log('CSV data appended successfully!');
+    });
+    errorStream.on('finish', () => {
+        console.log('CSV data appended successfully!');
+    });
+
+    successStream.on('error', (err) => {
+        console.error('Error appending CSV data:', err);
+    });
+
+    errorStream.on('error', (err) => {
+        console.error('Error appending CSV data:', err);
+    });
+
+    // Header row
+    const header = ['Timestamp', 'SiteUrl', 'Page', 'Webpart', 'Type', 'Notes'];
+    const csvRow = header.join(',') + '\n';
+    successStream.write(csvRow);
+    errorStream.write(csvRow);
+
     for (const site of sites) {
-        console.log(`Site: ${site.webUrl ?? 'NO NAME'}`);
-        console.log(`ID: ${site.id}`);
+        // console.log(`Site: ${site.webUrl ?? 'NO NAME'}`);
+        // console.log(`ID: ${site.id}`);
 
         try {
-            const sitePagePage = await getSitePagesAsync(site);
-            const pages: any[] = sitePagePage.value;
 
-            for (const page of pages) {
-                console.log(` Page: ${page.title ?? 'NO NAME'}`);
-                console.log(` ID: ${page.id}`);
+            // get subsites
+            let subsites = await getSubsites(site);
 
-                const sitePageWebPart = await getSitePageWebPartsAsync(site, page);
-                const webparts: any[] = sitePageWebPart.value;
+            // create a list of the site and it's subsites
+            let sitesToSearch = [site, ...subsites];
+
+
+            for (const siteToSearch of sitesToSearch) {
+                // console.log(`Site: ${siteToSearch.webUrl ?? 'NO NAME'}`);
 
                 try {
-                    for (const webpart of webparts) {
-                        if (webpart['@odata.type'] == "#microsoft.graph.textWebPart") {
-                            continue;
+                    const sitePagePage = await getSitePagesAsync(siteToSearch);
+                    const pages: any[] = sitePagePage.value;
+
+                    for (const page of pages) {
+                        // console.log(` Page: ${page.title ?? 'NO NAME'}`);
+                        // console.log(` ID: ${page.id}`);
+
+                        try {
+                            const sitePageWebPart = await getSitePageWebPartsAsync(siteToSearch, page);
+                            const webparts: any[] = sitePageWebPart.value;
+
+
+                            for (const webpart of webparts) {
+                                if (webpart['@odata.type'] == "#microsoft.graph.textWebPart") {
+                                    continue;
+                                }
+
+                                if (webpartIdsToFind.indexOf(webpart.webPartType) === -1) {
+                                    continue;
+                                }
+
+
+                                WriteLog(successStream, siteToSearch, page, "", webpart, "Success");
+
+                                // console.log(`Found Webpart!!`);
+                                // console.log(` Site: ${siteToSearch.webUrl ?? 'NO NAME'}`);
+                                // console.log(` Page: ${page.title ?? 'NO NAME'}`);
+                                // console.log(` webPartType: ${webpart.webPartType}`);
+                            }
                         }
-                        console.log(`  Webpart:`);
-                        console.log(`   ID: ${webpart.id}`);
-                        console.log(`   webPartType: ${webpart.webPartType}`);
+                        catch (err) {
+                            WriteLog(errorStream, siteToSearch, page, err, "", "Error Getting Webparts");
+                            console.log(`Error getting webparts: ${err}`);
+
+                        }
+
                     }
                 }
                 catch (err) {
-                    console.log(`Error getting webparts: ${err}`);
+                    WriteLog(errorStream, siteToSearch, "", err, "", "Error Getting Pages");
+                    console.log(`Error getting pages: ${err}`);
                 }
-                
-            }
 
+
+            }
         }
+
         catch (err) {
+            WriteLog(errorStream, site, "", err, "", "Error Getting SubSites");
             console.log(`Error getting pages: ${err}`);
         }
 
-      } 
-      return Promise.resolve();
 
+    }
+    // Close the stream when done appending
+    errorStream.end();
+    successStream.end();
+
+    return Promise.resolve();
+}
+
+async function getSubsites(site: Site) {
+    // Ensure client isn't undefined
+    if (!_appClient) {
+        throw new Error('Graph has not been initialized for app-only auth');
+    }
+
+    let subsites = [];
+
+    let sites = await _appClient.api(`/sites/${site.id}/sites`)
+        .select(['webUrl', 'id'])
+        .get();
+    for (let subsite of sites.value) {
+        subsites.push(subsite);
+
+        let subsubsites: any = await getSubsites(subsite);
+        subsites.push(...subsubsites);
+    }
+    return subsites;
+}
+
+function WriteLog(stream: fs.WriteStream, site: Site, page: any, err: any, webpart: any, type: string) {
+    const timestamp = new Date().toISOString().replace(/[-:T.]/g, '');
+    const row = [timestamp, site.webUrl, page.title, webpart.webPartType, type, err];
+    const csvRow = row.join(',') + '\n';
+    stream.write(csvRow);
 }

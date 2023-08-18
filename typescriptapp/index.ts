@@ -18,6 +18,13 @@ async function main() {
         'List webparts on sites'
     ];
 
+    // Generate a timestamp for the file name
+    const timestamp = new Date().toISOString().replace(/[-:T.]/g, '');
+
+    // Specify the file path with the timestamp
+    const fileName = `WebPartsInSite_${timestamp}.csv`;
+    const filePath = fileName;
+
     while (choice != -1) {
         choice = readline.keyInSelect(choices, 'Select an option', { cancel: 'Exit' });
 
@@ -36,7 +43,7 @@ async function main() {
                 break;
             case 2:
                 // Run any Graph code
-                await listWebPartsOnSitesAsync();
+                await listWebPartsOnSitesAsync(settings, filePath);
                 break;
             default:
                 console.log('Invalid choice! Please try again.');
@@ -88,13 +95,13 @@ async function listSitesAsync() {
     }
   }
 
-async function listWebPartsOnSitesAsync() {
+async function listWebPartsOnSitesAsync(settings: AppSettings, filePath: string) {
     try {
         let sites = await graphHelper.getAllSitesAsync();
 
         console.log(`Sites Found: ${sites.length}`);
 
-        await graphHelper.getWebpartsOnSites(sites);
+        await graphHelper.getWebpartsOnSites(sites, settings.webparts, filePath);
 
         
       } catch (err) {
