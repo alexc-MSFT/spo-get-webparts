@@ -1,8 +1,9 @@
 import * as readline from 'readline-sync';
 import { Site } from '@microsoft/microsoft-graph-types';
 
+import * as graphHelper from './graphHelper.ts';
+
 import settings, { AppSettings } from './appSettings';
-import * as graphHelper from './graphHelper';
 
 async function main() {
     console.log('TypeScript Graph Tutorial');

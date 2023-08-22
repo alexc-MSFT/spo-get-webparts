@@ -4,7 +4,7 @@ import { Client, GraphRequestOptions, PageCollection, PageIterator, PageIterator
 import { TokenCredentialAuthenticationProvider } from
     '@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials';
 
-import { AppSettings } from './appSettings';
+import { AppSettings } from './appSettings.ts';
 import { Site } from '@microsoft/microsoft-graph-types';
 import * as fs from 'fs';
 
@@ -154,9 +154,14 @@ export async function getWebpartsOnSites(sites: Site[], webpartIdsToFind: string
         throw new Error('Graph has not been initialized for app-only auth');
     }
 
+    // Get name
+    let splitPath = filePath.split('.');
+    let fileName = splitPath[0];
+    let fileExtension = splitPath[1];
+
     // Create a writable stream to append data to the file
-    const successStream = fs.createWriteStream(`${filePath}_Success`, { flags: 'a' });
-    const errorStream = fs.createWriteStream(`${filePath}_Error`, { flags: 'a' });
+    const successStream = fs.createWriteStream(`${fileName}_Success.${fileExtension}`, { flags: 'a' });
+    const errorStream = fs.createWriteStream(`${fileName}_Error.${fileExtension}`, { flags: 'a' });
 
     // ADd handler for stream events
     successStream.on('finish', () => {
@@ -175,7 +180,7 @@ export async function getWebpartsOnSites(sites: Site[], webpartIdsToFind: string
     });
 
     // Header row
-    const header = ['Timestamp', 'SiteUrl', 'Page', 'Webpart', 'Type', 'Notes'];
+    const header = ['Timestamp', 'SiteUrl', 'Page', 'Webpart', 'WebpartName', 'Type', 'Notes'];
     const csvRow = header.join(',') + '\n';
     successStream.write(csvRow);
     errorStream.write(csvRow);
@@ -221,10 +226,9 @@ export async function getWebpartsOnSites(sites: Site[], webpartIdsToFind: string
 
                                 WriteLog(successStream, siteToSearch, page, "", webpart, "Success");
 
-                                // console.log(`Found Webpart!!`);
-                                // console.log(` Site: ${siteToSearch.webUrl ?? 'NO NAME'}`);
-                                // console.log(` Page: ${page.title ?? 'NO NAME'}`);
-                                // console.log(` webPartType: ${webpart.webPartType}`);
+                                // Get site Owners
+                                // 
+                                
                             }
                         }
                         catch (err) {
@@ -280,7 +284,11 @@ async function getSubsites(site: Site) {
 
 function WriteLog(stream: fs.WriteStream, site: Site, page: any, err: any, webpart: any, type: string) {
     const timestamp = new Date().toISOString().replace(/[-:T.]/g, '');
-    const row = [timestamp, site.webUrl, page.title, webpart.webPartType, type, err];
+    let webpartFriendlyName = ""
+    if (webpart.data !== undefined) {
+        webpartFriendlyName = webpart.data.title;
+    }
+    const row = [timestamp, site.webUrl, page.title, webpart.webPartType, webpartFriendlyName, type, err];
     const csvRow = row.join(',') + '\n';
     stream.write(csvRow);
 }
