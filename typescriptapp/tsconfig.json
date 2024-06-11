@@ -8,7 +8,7 @@
     "sourceMap": true,
     /* Type Checking */
     "strict": true,
-    "allowImportingTsExtensions": true,                                      /* Enable all strict type-checking options. */
+                               /* Enable all strict type-checking options. */
               /* Skip type checking .d.ts files that are included with TypeScript. */
     "skipLibCheck": true                                 /* Skip type checking all .d.ts files. */
   }

@@ -73,8 +73,6 @@ function ConnectToMSGraph
     try{
         
         Connect-MgGraph -ClientId $clientId -TenantId $tenantId -CertificateThumbprint $thumbprint
-
-        #select-MgProfile -Name "beta"
     }
     catch{
         Write-Host "Error connecting to MS Graph - $($Error[0].Exception.Message)" -ForegroundColor Red
@@ -94,7 +92,8 @@ function ConnectToPnP ($siteUrl){
 function Get-SitePages($site)
 {
     try {
-        $pages = Get-MgSitePage -SiteId $site.Id -Select "id,title,webUrl,name" -ErrorAction Stop
+        #$pages = Get-MgSitePage -SiteId $site.Id -Select "id,title,webUrl,name" -ErrorAction Stop
+        $pages = Get-MgBetaSitePage -SiteId $site.Id -Select "id,title,webUrl,name" -ErrorAction Stop
         return $pages
     }
     catch {
@@ -146,6 +145,13 @@ function CheckPageContainsWebPartPnP($site, $page, $ownerEmails)
         }
     }
     catch {
+        if ($Error[0].Exception.Message.Contains("The JSON value could not be converted to System"))
+        {
+            Write-LogEntry -siteUrl $site.WebUrl -ownerEmail "" -pageUrl $page.WebUrl -pageTitle $pageTitle -webPartId "" -type "Warning" -message "Unmodified sample page - no custom webparts"
+            Write-Host " Error getting webparts for page on site $($site.WebUrl) - Expected sample page, no custom webaprts" -ForegroundColor Yellow
+            return
+        }
+
         Write-LogEntry -siteUrl $site.WebUrl -ownerEmail "" -pageUrl $page.WebUrl -pageTitle $pageTitle -webPartId "" -type "Error" -message "Error getting webparts (PnP) - $($Error[0].Exception.Message)"
         Write-Host " Error getting webparts for page on site $($site.WebUrl) - $($Error[0].Exception.Message)" -ForegroundColor Red
 
@@ -159,7 +165,8 @@ function Get-SitePageWebparts($site, $page, $ownerEmails)
     try {
         Write-Host " Getting webparts for page, $($page.Title) on site $($site.WebUrl)"
         
-        $page = Get-MgSitePage -SiteId $site.Id -SitePageId $page.Id -ExpandProperty "webparts" -ErrorAction Stop
+        #$page = Get-MgSitePage -SiteId $site.Id -SitePageId $page.Id -ExpandProperty "webparts" -ErrorAction Stop
+        $page = Get-MgBetaSitePage -SiteId $site.Id -SitePageId $page.Id -ExpandProperty "webparts" -ErrorAction Stop
         #$webparts = Get-MgBetaSitePageWebPart -SiteId $site.Id -SitePageId $page.Id -ErrorAction Stop
       
         return $page

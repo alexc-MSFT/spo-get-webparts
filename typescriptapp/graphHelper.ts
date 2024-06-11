@@ -4,13 +4,16 @@ import { Client, GraphRequestOptions, PageCollection, PageIterator, PageIterator
 import { TokenCredentialAuthenticationProvider } from
     '@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials';
 
-import { AppSettings } from './appSettings.ts';
+import { AppSettings } from './appSettings';
 import { Site } from '@microsoft/microsoft-graph-types';
 import * as fs from 'fs';
 
 let _settings: AppSettings | undefined = undefined;
 let _clientSecretCredential: ClientSecretCredential | undefined = undefined;
 let _appClient: Client | undefined = undefined;
+let allSites: boolean = false;
+let sitesToSearch: string[] = [];
+let sitesToExclude: string[] = [];
 
 export function initializeGraphForAppOnlyAuth(settings: AppSettings) {
     // Ensure settings isn't null
@@ -39,6 +42,14 @@ export function initializeGraphForAppOnlyAuth(settings: AppSettings) {
             defaultVersion: 'beta'
         });
     }
+
+    allSites = _settings.allSites;
+    sitesToSearch = _settings.sitesToSearch;
+    sitesToExclude = _settings.sitesToExclude;
+
+    console.log(`sitesToSearch ${sitesToSearch}`);
+    console.log(`sitesToExclude ${sitesToExclude}`);
+    console.log(`webparts ${_settings.webparts}`);
 }
 
 export async function getAppOnlyTokenAsync(): Promise<string> {
@@ -64,17 +75,28 @@ export async function getAllSitesAsync(): Promise<Site[]> {
 
     const response = await _appClient?.api('/sites')
         .select(['webUrl', 'id'])
-        .top(50)
+        .top(500)
         .orderby('webUrl')
         .get();
 
 
     const callback: PageIteratorCallback = (site: Site) => {
         // console.log(site.webUrl);
-        if (site.webUrl?.includes('my.sharepoint.com')) {
+        if (site.webUrl?.includes('my.sharepoint.com')) 
+        {
             // don't add mysite
-        } else {
-
+        } 
+        else if (allSites) 
+        {   
+            if (sitesToExclude.indexOf(site.webUrl ?? '') === -1) 
+            {
+                // Add site only if it is not in the list of sites to exclude
+                sites.push(site);
+            }
+        } 
+        else if (sitesToSearch.indexOf(site.webUrl ?? '') !== -1) 
+        {
+            // Add site only if it is in the list of sites to search
             sites.push(site);
         }
 
@@ -114,8 +136,19 @@ export async function getSitesAsync(): Promise<PageCollection> {
 
     return _appClient?.api('/sites')
         .select(['webUrl', 'id'])
-        .top(50)
+        .top(500)
         .orderby('webUrl')
+        .get();
+}
+
+export async function getSiteAsync(siteId:string): Promise<Site> {
+    // Ensure client isn't undefined
+    if (!_appClient) {
+        throw new Error('Graph has not been initialized for app-only auth');
+    }
+
+    return _appClient?.api(`/sites/${siteId}`)
+        .select(['webUrl', 'id'])
         .get();
 }
 
@@ -233,7 +266,7 @@ export async function getWebpartsOnSites(sites: Site[], webpartIdsToFind: string
                         }
                         catch (err) {
                             WriteLog(errorStream, siteToSearch, page, err, "", "Error Getting Webparts");
-                            console.log(`Error getting webparts: ${err}`);
+                            //console.log(`Error getting webparts: ${err}`);
 
                         }
 
@@ -241,16 +274,15 @@ export async function getWebpartsOnSites(sites: Site[], webpartIdsToFind: string
                 }
                 catch (err) {
                     WriteLog(errorStream, siteToSearch, "", err, "", "Error Getting Pages");
-                    console.log(`Error getting pages: ${err}`);
+                    //console.log(`Error getting pages: ${err}`);
                 }
-
 
             }
         }
 
         catch (err) {
             WriteLog(errorStream, site, "", err, "", "Error Getting SubSites");
-            console.log(`Error getting pages: ${err}`);
+            //console.log(`Error getting SubSites: ${err}`);
         }
 
 
@@ -270,6 +302,7 @@ async function getSubsites(site: Site) {
 
     let subsites = [];
 
+    // todo
     let sites = await _appClient.api(`/sites/${site.id}/sites`)
         .select(['webUrl', 'id'])
         .get();

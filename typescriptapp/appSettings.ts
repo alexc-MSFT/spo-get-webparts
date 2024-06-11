@@ -9,17 +9,29 @@ const appSettings = JSON.parse(appSettingsContent);
 const clientId = appSettings.clientId;
 const clientSecret = appSettings.clientSecret;
 const tenantId = appSettings.tenantId;
-const webparts = appSettings.siteId;
+const webparts = appSettings.webparts;
+const sitesInputPath = appSettings.sitesInputPath;
+const siteToExcludePath = appSettings.siteToExcludePath;
+const allSites : boolean = appSettings.allSites;
 
 console.log('Configuration loaded:', appSettings);
 
+let sites: string[] = [];
+let sitesExclude: string[] = [];
 
+const sitesToSearch : string[] = sites;
+const sitesToExclude : string[] = sitesExclude;
 
 const settings: AppSettings = {
     clientId: clientId,
     clientSecret: clientSecret,
     tenantId: tenantId,
-    webparts: webparts
+    webparts: webparts,
+    sitesInputPath: sitesInputPath,
+    siteToExcludePath: siteToExcludePath,
+    sitesToSearch: sitesToSearch,
+    sitesToExclude: sitesToExclude,
+    allSites: allSites
   };
   
   export interface AppSettings {
@@ -27,6 +39,11 @@ const settings: AppSettings = {
     clientSecret: string;
     tenantId: string;
     webparts: string[];
+    sitesInputPath: string;
+    siteToExcludePath: string;
+    sitesToSearch : string[];
+    sitesToExclude : string[];
+    allSites: boolean;
   }
   
   export default settings;

@@ -7,3 +7,4 @@ dotnetapp/ListSitesWithWebPart/bin
 dotnetapp/ListSitesWithWebPart/obj
 dotnetapp/ListSitesWithWebPart/.vscode
 typescriptapp/*.csv
+__azurite_db_table__.json
