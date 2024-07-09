@@ -9,8 +9,8 @@
 
 ## Requires the following modules:
 try {
+    Import-Module Microsoft.Graph.Authentication
     Import-Module Microsoft.Graph.Sites
-    Import-Module Microsoft.Graph.Beta.Sites
     Import-Module Microsoft.Graph.Groups
     Import-Module PnP.PowerShell
 }
@@ -33,33 +33,40 @@ catch {
 ##############################################
 
 # Auth
-$clientId = "38acafba-2eb6-4510-848e-070b493ea4dc"
-$tenantId = "groverale.onmicrosoft.com"
-$thumbprint = "72A385EF67B35E1DFBACA89180B7B3C8F97453D7"
+$clientId = ""
+$tenantId = ""
+$thumbprint = "C"
 
 # Title            WebPartId
 # -----            ---------
 # YouTube          544dd15b-cf3c-441b-96da-004d5a8cea1d
 # Twitter          f6fdf4f8-4a24-437b-a127-32e66a5dd9b4
 # Stream (Classic) 275c0095-a77e-4f6d-a2a0-6a7626911518    
+# Embed            490d7c76-1824-45b2-9de3-676421c997fa
 
 # WebPartTypeIds to check
 $webPartTypeIds = @(
-    "544dd15b-cf3c-441b-96da-004d5a8cea1d",
+    "490d7c76-1824-45b2-9de3-676421c997fa",
+    "275c0095-a77e-4f6d-a2a0-6a7626911518",
     "f6fdf4f8-4a24-437b-a127-32e66a5dd9b4",
-    "275c0095-a77e-4f6d-a2a0-6a7626911518"
+    "8c88f208-6c77-4bdb-86a0-0c47b4316588"
+)
+
+# Text to for in Embed Web Parts (if Embed Web Part is included above)
+$webPartSearchText = @(
+    "https://web.microsoftstream.com/video"
 )
 
 # Process all sites or only sites in the input file
-$allSites = $false
+$allSites = $true
 
 # List of Sites to check (ignore if $allSites = $true)
 $inputSitesCSV = "./SiteCollectionsList.txt"
 
 # Log file location (timestamped with script start time)
 $timeStamp = Get-Date -Format "yyyyMMddHHmmss"
-$successLogFileLocation = "Output\WebPartSuccessLog-$timeStamp.csv"
-$errorLogFileLocation = "Output\WebPartWarnErrorLog-$timeStamp.csv"
+$successLogFileLocation = "C:\WebPartSuccessLog-$timeStamp.csv"
+$errorLogFileLocation = "C:\WebPartWarnErrorLog-$timeStamp.csv"
 
 # Verbose Logging (Inlcudes all sites and pages, not just sites with webparts)
 $verbose = $false
@@ -68,45 +75,41 @@ $verbose = $false
 # Functions
 ##############################################
 
-function ConnectToMSGraph 
-{  
-    try{
+function ConnectToMSGraph {  
+    try {
         
         Connect-MgGraph -ClientId $clientId -TenantId $tenantId -CertificateThumbprint $thumbprint
     }
-    catch{
+    catch {
         Write-Host "Error connecting to MS Graph - $($Error[0].Exception.Message)" -ForegroundColor Red
         Exit
     }
 }
 
-function ConnectToPnP ($siteUrl){
-    try{
+function ConnectToPnP ($siteUrl) {
+    try {
         Connect-PnPOnline -Url $siteUrl -ClientId $clientId -Tenant $tenantId -Thumbprint $thumbprint
     }
-    catch{
+    catch {
         Write-Host "Error connecting to PnP" -ForegroundColor Red
     }
 }
 
-function Get-SitePages($site)
-{
+function Get-SitePages($site) {
     try {
         #$pages = Get-MgSitePage -SiteId $site.Id -Select "id,title,webUrl,name" -ErrorAction Stop
-        $pages = Get-MgBetaSitePage -SiteId $site.Id -Select "id,title,webUrl,name" -ErrorAction Stop
+        $pages = Get-MgSitePage -SiteId $site.Id -Select "id,title,webUrl,name" -ErrorAction Stop
         return $pages
     }
     catch {
 
-        if($Error[0].Exception.Message.Contains("Item not found"))
-        {
+        if ($Error[0].Exception.Message.Contains("Item not found")) {
             Write-LogEntry -siteUrl $site.WebUrl -ownerEmail "" -pageUrl "" -pageTitle "" -webPartId "" -type "Warning" -message "Site has no pages library - likely classic/legacy site"
             Write-Host " Error getting pages for $($site.WebUrl), - Site has no pages library - likely classic/legacy site" -ForegroundColor Yellow
             return
         }
 
-        if ($Error[0].Exception.Message.Contains("Access to this site has been blocked"))
-        {
+        if ($Error[0].Exception.Message.Contains("Access to this site has been blocked")) {
             Write-LogEntry -siteUrl $site.WebUrl -ownerEmail "" -pageUrl "" -pageTitle "" -webPartId "" -type "Warning" -message "Site has been locked, unable to get site data"
             Write-Host " Site has been locked - site will likely be disposed of in 3 months" -ForegroundColor Yellow
             return
@@ -117,36 +120,44 @@ function Get-SitePages($site)
     }
 }
   
-function CheckPageContainsWebPartPnP($site, $page, $ownerEmails)
-{
+function CheckPageContainsWebPartPnP($site, $page, $ownerEmails) {
     Write-Host "  Checking page (PnP) ($($page.WebUrl)) for webparts" -ForegroundColor White
 
     try {
-        $webParts = Get-PnPPageComponent -Page $page.Name | Select-Object Title, WebPartId, InstanceId -ErrorAction Stop
+        $webParts = Get-PnPPageComponent -Page $page.Name | Select-Object Title, WebPartId, InstanceId, PropertiesJson -ErrorAction Stop
 
-        foreach ($webPart in $webParts)
-        {
-            if ($webPartTypeIds.Contains($webPart.WebPartId))
-            {
+        foreach ($webPart in $webParts) {
+            if ($webPartTypeIds.Contains($webPart.WebPartId)) {
+                $writeLog = $true
                 # Write to Log File
                 Write-Host "   Found Webpart:" $webPart.Title -ForegroundColor Green
-                foreach ($ownerEmail in $ownerEmails)
-                {
-                    Write-LogEntry -siteUrl $site.WebUrl -ownerEmail $ownerEmail -pageUrl $page.WebUrl -pageTitle $page.Title -webPartId $webPart.InstanceId -webPartType $webPart.WebPartId -webPartTitle $webPart.Title -type "Success" -message ""
+                foreach ($ownerEmail in $ownerEmails) {
+                    If ($webPartSearchText -ne "" -and $webPartTypeIds -contains "490d7c76-1824-45b2-9de3-676421c997fa" -and $webPart.WebPartId -eq "490d7c76-1824-45b2-9de3-676421c997fa") {
+                        Write-Host "    Checking for '$($webPartSearchText)' within Embed Webpart" -ForegroundColor White
+                        # Embed web part - check for search text
+                        if ($webPart.PropertiesJson.Contains($webPartSearchText)) {
+                            $writeLog = $true
+                        }
+                        else {
+                            $writeLog = $false
+                        }
+                    }
+
+                    If ($writeLog) {
+                        Write-LogEntry -siteUrl $site.WebUrl -ownerEmail $ownerEmail -pageUrl $page.WebUrl -pageTitle $page.Title -webPartId $webPart.InstanceId -webPartType $webPart.WebPartId -webPartTitle $webPart.Title -type "Success" -message ""
+                    }
                 }
             }
-            else 
-            {
-                if ($verbose)
-                {
+            else {
+                if ($verbose) {
                     Write-LogEntry -siteUrl $site.WebUrl -ownerEmail "" -pageUrl $page.WebUrl -pageTitle $page.Title -type "Info" -message "No target webparts found on page"
                 }
             }
+            
         }
     }
     catch {
-        if ($Error[0].Exception.Message.Contains("The JSON value could not be converted to System"))
-        {
+        if ($Error[0].Exception.Message.Contains("The JSON value could not be converted to System")) {
             Write-LogEntry -siteUrl $site.WebUrl -ownerEmail "" -pageUrl $page.WebUrl -pageTitle $pageTitle -webPartId "" -type "Warning" -message "Unmodified sample page - no custom webparts"
             Write-Host " Error getting webparts for page on site $($site.WebUrl) - Expected sample page, no custom webaprts" -ForegroundColor Yellow
             return
@@ -160,14 +171,13 @@ function CheckPageContainsWebPartPnP($site, $page, $ownerEmails)
     
 }
 
-function Get-SitePageWebparts($site, $page, $ownerEmails)
-{
+function Get-SitePageWebparts($site, $page, $ownerEmails) {
     try {
         Write-Host " Getting webparts for page, $($page.Title) on site $($site.WebUrl)"
         
         #$page = Get-MgSitePage -SiteId $site.Id -SitePageId $page.Id -ExpandProperty "webparts" -ErrorAction Stop
-        $page = Get-MgBetaSitePage -SiteId $site.Id -SitePageId $page.Id -ExpandProperty "webparts" -ErrorAction Stop
-        #$webparts = Get-MgBetaSitePageWebPart -SiteId $site.Id -SitePageId $page.Id -ErrorAction Stop
+        $page = Get-MgSitePage -SiteId $site.Id -SitePageId $page.Id -ExpandProperty "webparts" -ErrorAction Stop
+        #$webparts = Get-MgSitePageWebPart -SiteId $site.Id -SitePageId $page.Id -ErrorAction Stop
       
         return $page
     }
@@ -192,36 +202,28 @@ function Get-SitePageWebparts($site, $page, $ownerEmails)
     }
 }
 
-function Does-PageContainIdentifiedWebparts($siteWebUrl, $page, $outputObjs, $ownerEmails)
-{
+function Does-PageContainIdentifiedWebparts($siteWebUrl, $page, $outputObjs, $ownerEmails) {
     Write-Host "  Checking page ($($page.WebUrl)) for webparts" -ForegroundColor White
 
-    if ($page.WebParts.Count -eq 0)
-    {
+    if ($page.WebParts.Count -eq 0) {
         Write-Host "   No webparts found on page $($page.WebUrl)" -ForegroundColor Yellow
-        if ($verbose)
-        {
+        if ($verbose) {
             Write-LogEntry -siteUrl $site.WebUrl -ownerEmail "" -pageUrl $page.WebUrl -pageTitle $page.Title -webPartId "" -type "Info" -message "No webparts found on page"
         }
         return
     }
 
-    foreach ($webPart in $page.WebParts)
-    {
-        if ($webPartTypeIds.Contains($webPart.AdditionalProperties.webPartType))
-        {
+    foreach ($webPart in $page.WebParts) {
+        if ($webPartTypeIds.Contains($webPart.AdditionalProperties.webPartType)) {
             # Write to Log File
             Write-Host "   Found Webpart:" $webPart.AdditionalProperties.webPartType -ForegroundColor Green
 
-            foreach ($email in $ownerEmails)
-            {
+            foreach ($email in $ownerEmails) {
                 Write-LogEntry -siteUrl $siteWebUrl -pageUrl $page.WebUrl -pageTitle $page.Title -webPartId $webPart.Id -webPartType $webPart.AdditionalProperties.webPartType -webPartTitle $webPart.AdditionalProperties.data.title -type "Success" -message "" -ownerEmail $email
             }
         }
-        else 
-        {
-            if ($verbose)
-            {
+        else {
+            if ($verbose) {
                 Write-LogEntry -siteUrl $siteWebUrl -ownerEmail "" -pageUrl $page.WebUrl -pageTitle $page.Title -type "Info" -message "No target webparts found on page"
             }
         }
@@ -233,8 +235,7 @@ function ReadSitesFromTxtFile($siteListCSVFile) {
     return $siteList
 }
 
-function Get-Sites
-{
+function Get-Sites {
     try {
         
         if (!$allSites) {
@@ -244,7 +245,7 @@ function Get-Sites
         }
 
         # Get all sites, filter out OneDrive sites
-        $sites = Get-MgSite -Property "siteCollection,webUrl,id" -All | Where-Object { !($_.WebUrl.Contains("my.sharepoint.com"))} -ErrorAction Stop
+        $sites = Get-MgSite -Property "siteCollection,webUrl,id" -All | Where-Object { !($_.WebUrl.Contains("my.sharepoint.com")) } -ErrorAction Stop
         return $sites #| where {$_.WebUrl.Contains("/home")}
     }
     catch {
@@ -252,8 +253,7 @@ function Get-Sites
     }   
 }
 
-function Get-AllSubsites ($site, $subsites)
-{
+function Get-AllSubsites ($site, $subsites) {
     Write-Host " Getting Subsites for: $($site.webUrl)..."
 
     # Add the site to the subsites array
@@ -271,30 +271,27 @@ function Get-AllSubsites ($site, $subsites)
         }
     }
     catch {
-        if ($Error[0].Exception.Message.Contains("Access to this site has been blocked"))
-        {
+        if ($Error[0].Exception.Message.Contains("Access to this site has been blocked")) {
             # Swallow the error - will be caught in next function
             return
         }
     } 
 }
 
-function Write-LogEntry($siteUrl, $pageUrl, $pageTitle, $webPartId, $webPartType, $type, $message, $webPartTitle, $ownerEmail)
-{
+function Write-LogEntry($siteUrl, $pageUrl, $pageTitle, $webPartId, $webPartType, $type, $message, $webPartTitle, $ownerEmail) {
     $logLine = New-Object -TypeName PSObject -Property @{
-        Type = $type
-        LogTime = Get-Date
-        WebParttype = $webPartType
-        SiteUrl = $siteUrl
-        PageUrl = $pageUrl
-        WebPartId = $webPartId
+        Type         = $type
+        LogTime      = Get-Date
+        WebParttype  = $webPartType
+        SiteUrl      = $siteUrl
+        PageUrl      = $pageUrl
+        WebPartId    = $webPartId
         WebPartTitle = $webPartTitle
-        Notes = $message
-        OwnerEmail = $ownerEmail
+        Notes        = $message
+        OwnerEmail   = $ownerEmail
     }
 
-    if ($type -eq "Success")
-    {
+    if ($type -eq "Success") {
         $logLine | Export-Csv -Path $successLogFileLocation -NoTypeInformation -Append
         return
     }
@@ -302,30 +299,25 @@ function Write-LogEntry($siteUrl, $pageUrl, $pageTitle, $webPartId, $webPartType
     $logLine | Export-Csv -Path $errorLogFileLocation -NoTypeInformation -Append
 }
 
-function ProcessSite($site, $ownerEmails)
-{
+function ProcessSite($site, $ownerEmails) {
     ## Get all pages
     $pages = Get-SitePages -site $site
 
-    if ($pages.Count -eq 0)
-    {
+    if ($pages.Count -eq 0) {
         Write-Host " No pages found on site $($site.WebUrl)" -ForegroundColor Yellow
-        if ($verbose)
-        {
+        if ($verbose) {
             Write-LogEntry -siteUrl $site.WebUrl -ownerEmail "" -pageUrl "" -pageTitle "" -webPartId "" -type "Info" -message "No pages found on site"
         }
         return
     }
 
     ## Loop through pages
-    foreach ($page in $pages)
-    {
+    foreach ($page in $pages) {
         ## Get all webparts
         $page = Get-SitePageWebparts -site $site -page $page -ownerEmails $ownerEmails
         
         ## Return if page has been processed using PnP
-        if ($page -eq "pnp")
-        {
+        if ($page -eq "pnp") {
             continue
         }
         ## Check if page contains webpart
@@ -333,8 +325,7 @@ function ProcessSite($site, $ownerEmails)
     }
 }
 
-function GetSiteOwner($site)
-{
+function GetSiteOwner($site) {
     $owners = @()
 
     Write-Host "Checking site ($($site.WebUrl)) for owners" -ForegroundColor White
@@ -342,8 +333,7 @@ function GetSiteOwner($site)
     try {
         $defaultDrive = Get-MgSiteDefaultDrive -SiteId $site.Id -Property Owner
 
-        if (![string]::IsNullOrEmpty($defaultDrive.Owner.User.AdditionalProperties.email))
-        {
+        if (![string]::IsNullOrEmpty($defaultDrive.Owner.User.AdditionalProperties.email)) {
             Write-Host "USER OWNER FOUND" -ForegroundColor Green
             $admin = $defaultDrive.Owner.User.AdditionalProperties.email
             $owners += $admin
@@ -354,13 +344,11 @@ function GetSiteOwner($site)
             ConnectToPnP -siteUrl $site.WebUrl
             $siteOwners = Get-PnPGroup -AssociatedOwnerGroup | Get-PnPGroupMember
 
-            foreach ($siteOwner in $siteOwners)
-            {
+            foreach ($siteOwner in $siteOwners) {
                 # We may have Groups, Sec Groups or users
 
                 # User - just add the email
-                if ($siteOwner.LoginName.Contains("|membership|"))
-                {
+                if ($siteOwner.LoginName.Contains("|membership|")) {
                     Write-Host "  Found: $($siteOwner.Email) as an owner" -ForegroundColor Green
                     $owners += $siteOwner.Email
                     continue
@@ -368,8 +356,7 @@ function GetSiteOwner($site)
 
                 # Group - get the group *Owners*
                 # Group membership can only be users, not groups so no need to recurse
-                if ($siteOwner.LoginName.Contains("|federateddirectoryclaimprovider|"))
-                {
+                if ($siteOwner.LoginName.Contains("|federateddirectoryclaimprovider|")) {
                     Write-Host "  Found: $($siteOwner.Email) (Group) as an owner" -ForegroundColor Green
                     $groupId = $siteOwner.LoginName.Split("|")[2]
 
@@ -378,8 +365,7 @@ function GetSiteOwner($site)
                     ## Instances where we the group id isn't properly formed
                     $members = Get-MgGroupOwner -GroupId $groupId.Substring(0, [Math]::Min($groupId.Length, 36)) -Property "userPrincipalName" 
 
-                    foreach ($member in $members)
-                    {
+                    foreach ($member in $members) {
                         Write-Host "   Found: $($member.AdditionalProperties.userPrincipalName) as an infered owner" -ForegroundColor Green
                         $owners += $member.AdditionalProperties.userPrincipalName
                     }
@@ -388,18 +374,15 @@ function GetSiteOwner($site)
 
                 # Sec Group - get the group *Members* as it's members who are owners of the site
                 # Sec Group membership can be all sorts so we need to recurse
-                if ($siteOwner.LoginName.Contains("|tenant|"))
-                {
+                if ($siteOwner.LoginName.Contains("|tenant|")) {
                     Write-Host "  Found: $($siteOwner.LoginName) (SecGroup) as an owner" -ForegroundColor Green
                     $groupId = $siteOwner.LoginName.Split("|")[2]
 
                     $members = Get-MgGroupMember -GroupId $groupId -Property "userPrincipalName,id" 
 
-                    foreach ($member in $members)
-                    {
+                    foreach ($member in $members) {
                         ## TODO - Check we have a user and not a group (if group we need to get memebers)
-                        if ($null -ne $member.AdditionalProperties.userPrincipalName)
-                        {
+                        if ($null -ne $member.AdditionalProperties.userPrincipalName) {
                             Write-Host "   Found: $($member.AdditionalProperties.userPrincipalName) as an infered owner" -ForegroundColor Green
                             ## We have a user
                             $owners += $member.AdditionalProperties.userPrincipalName
@@ -417,8 +400,7 @@ function GetSiteOwner($site)
                 }
             }
         }
-        else
-        {
+        else {
             Write-Host "GROUP OWNER FOUND" -ForegroundColor Green
 
             $group = $defaultDrive.Owner.AdditionalProperties.group
@@ -427,8 +409,7 @@ function GetSiteOwner($site)
             $groupOwners = Get-MgGroupOwner -GroupId $group.id -Property "userPrincipalName"
             Write-Host " Getting Group Owners" -ForegroundColor Green
 
-            foreach ($groupOwner in $groupOwners)
-            {
+            foreach ($groupOwner in $groupOwners) {
                 Write-Host "  Found: $($groupOwner.AdditionalProperties.userPrincipalName) as an owner" -ForegroundColor Green
                 $owners += $groupOwner.AdditionalProperties.userPrincipalName
             }
@@ -443,14 +424,11 @@ function GetSiteOwner($site)
 }
 
 ## Recursive function to get members (users) of a security group
-function GetSecGroupMembers($groupId, $users)
-{
+function GetSecGroupMembers($groupId, $users) {
     $members = Get-MgGroupMember -GroupId $groupId -Property "userPrincipalName,id"
 
-    foreach ($member in $members)
-    {
-        if ($null -ne $member.AdditionalProperties.userPrincipalName)
-        {
+    foreach ($member in $members) {
+        if ($null -ne $member.AdditionalProperties.userPrincipalName) {
             Write-Host "     Found Member - $($member.AdditionalProperties.userPrincipalName) " -ForegroundColor Green
             ## We have a user
             $users += $member.AdditionalProperties.userPrincipalName
@@ -482,8 +460,7 @@ $outputObjs | Export-Csv -Path $errorLogFileLocation -NoTypeInformation -Force
 $outputObjs | Export-Csv -Path $successLogFileLocation -NoTypeInformation -Force
 
 ## Loop through sites
-foreach ($site in $sites)
-{
+foreach ($site in $sites) {
 
     # Get Owner Details (SiteCollection)
     $ownerEmails = GetSiteOwner -site $site
@@ -493,8 +470,7 @@ foreach ($site in $sites)
     $subsites = New-Object System.Collections.ArrayList
     Get-AllSubsites -site $site -subsites $subsites
 
-    foreach($subsite in $subsites)
-    {
+    foreach ($subsite in $subsites) {
         ## Process Sites
         ProcessSite -site $subsite -ownerEmails $ownerEmails
     }
